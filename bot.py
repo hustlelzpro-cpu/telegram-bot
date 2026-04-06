@@ -55,41 +55,42 @@ user_score = {}
 user_answers = {}
 
 # =========================
-# QUESTIONS (PRO FUNNEL)
+# QUESTIONS (ULTRA CLAIRES)
 # =========================
 QUESTIONS = [
-    ("Quel capital peux-tu réellement mobiliser immédiatement ?", [
-        "< 300",
-        "300 - 500",
-        "500 - 1000",
-        "1000+"
+    ("Combien peux-tu investir immédiatement ?", [
+        "Moins de 300€",
+        "300 à 500€",
+        "500 à 1000€",
+        "Plus de 1000€"
     ]),
 
-    ("Quelle situation décrit le mieux ton objectif ?", [
-        "dépendance financière actuelle",
-        "complément de revenu sérieux",
-        "liberté financière long terme",
-        "curiosité / test"
+    ("Quel est ton objectif principal ?", [
+        "Gagner un complément de revenu",
+        "Remplacer mon salaire",
+        "Faire fructifier mon argent",
+        "Je teste juste par curiosité"
     ]),
 
-    ("Quel est ton niveau d'expérience réel ?", [
-        "aucune expérience",
-        "quelques tests",
-        "déjà actif / investi régulièrement"
+    ("As-tu de l’expérience en trading / investissement en ligne ?", [
+        "Aucune expérience",
+        "J’ai déjà essayé sans résultats",
+        "J’ai obtenu quelques résultats",
+        "Je suis déjà actif régulièrement"
     ]),
 
-    ("As-tu déjà essayé de générer de l'argent en ligne ?", [
-        "jamais",
-        "oui mais échec",
-        "oui avec petits résultats",
-        "oui résultats stables"
+    ("As-tu déjà essayé de gagner de l’argent en ligne ?", [
+        "Jamais",
+        "Oui mais sans succès",
+        "Oui avec petits résultats",
+        "Oui avec résultats stables"
     ]),
 
-    ("Quelle est ta situation d'urgence actuelle ?", [
-        "besoin de résultats rapides",
-        "objectif dans 1-3 mois",
-        "objectif long terme",
-        "aucune urgence"
+    ("Quand veux-tu réellement commencer ?", [
+        "Maintenant",
+        "Dans les 30 jours",
+        "Plus tard",
+        "Je ne sais pas encore"
     ])
 ]
 
@@ -103,48 +104,50 @@ def keyboard(options):
     ])
 
 # =========================
-# SCORING (PRO LOGIC)
+# SCORING
 # =========================
 def score(step, choice):
     s = 0
 
     if step == 0:
-        if choice == "1000+":
+        if choice == "Plus de 1000€":
             s += 4
-        elif choice == "500 - 1000":
+        elif choice == "500 à 1000€":
             s += 3
-        elif choice == "300 - 500":
+        elif choice == "300 à 500€":
             s += 1
 
     elif step == 1:
-        if choice == "dépendance financière actuelle":
+        if choice == "Remplacer mon salaire":
             s += 4
-        elif choice == "complément de revenu sérieux":
+        elif choice == "Gagner un complément de revenu":
             s += 3
-        elif choice == "liberté financière long terme":
+        elif choice == "Faire fructifier mon argent":
             s += 2
 
     elif step == 2:
-        if choice == "déjà actif / investi régulièrement":
+        if choice == "Je suis déjà actif régulièrement":
             s += 3
-        elif choice == "quelques tests":
+        elif choice == "J’ai obtenu quelques résultats":
+            s += 2
+        elif choice == "J’ai déjà essayé sans résultats":
             s += 1
 
     elif step == 3:
-        if choice == "oui résultats stables":
+        if choice == "Oui avec résultats stables":
             s += 4
-        elif choice == "oui avec petits résultats":
+        elif choice == "Oui avec petits résultats":
             s += 2
-        elif choice == "oui mais échec":
+        elif choice == "Oui mais sans succès":
             s += 1
 
     elif step == 4:
-        if choice == "besoin de résultats rapides":
+        if choice == "Maintenant":
             s += 5
-        elif choice == "objectif dans 1-3 mois":
+        elif choice == "Dans les 30 jours":
             s += 3
-        elif choice == "aucune urgence":
-            s -= 2
+        elif choice == "Plus tard":
+            s -= 1
 
     return s
 
