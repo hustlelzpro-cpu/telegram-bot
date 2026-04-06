@@ -152,6 +152,39 @@ def score(step, choice):
     return s
 
 # =========================
+# RELANCE AUTOMATIQUE
+# =========================
+async def relance(context: ContextTypes.DEFAULT_TYPE):
+    job = context.job
+    user_id = job.data["user_id"]
+    score = job.data["score"]
+
+    if score >= 14:
+        msg = (
+            "Tu n’as pas réservé ton appel.\n\n"
+            "Les places sont limitées.\n"
+            "Réserve maintenant :\n"
+            + CALENDLY_LINK
+        )
+
+    elif score >= 10:
+        msg = (
+            "Tu hésites encore.\n\n"
+            "Un appel permet de clarifier rapidement ta situation.\n"
+            "Réserve ici :\n"
+            + CALENDLY_LINK
+        )
+
+    else:
+        return
+
+    try:
+        await context.bot.send_message(chat_id=user_id, text=msg)
+        logger.info(f"RELANCE SENT to {user_id}")
+    except Exception as e:
+        logger.error(f"RELANCE ERROR: {e}")
+
+# =========================
 # START
 # =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -192,7 +225,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         logger.info(f"USER {user_id} STEP {step} CHOICE {choice}")
 
-        # FIN
         if step >= len(QUESTIONS):
             final_score = user_score[user_id]
 
@@ -211,7 +243,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ))
             conn.commit()
 
-            # SEGMENTATION + MESSAGE
+            # SEGMENTATION
             if final_score >= 14:
                 msg = (
                     "Ton profil est validé.\n\n"
@@ -223,18 +255,25 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif final_score >= 10:
                 msg = (
                     "Ton profil est intéressant.\n\n"
-                    "On doit valider certains points ensemble avant d'aller plus loin.\n\n"
-                    "Réserve un appel pour voir si ça vaut le coup pour toi :\n"
+                    "On doit valider certains points ensemble.\n\n"
+                    "Réserve un appel :\n"
                     + CALENDLY_LINK
                 )
 
             else:
                 msg = (
                     "Ton profil ne correspond pas encore.\n\n"
-                    "Reviens plus tard quand tu seras prêt à passer à l'action."
+                    "Reviens plus tard."
                 )
 
             await query.message.reply_text(msg)
+
+            # RELANCE AUTO
+            context.job_queue.run_once(
+                relance,
+                when=60,
+                data={"user_id": user_id, "score": final_score}
+            )
 
             logger.info(f"LEAD SAVED user {user_id} score {final_score}")
             return
