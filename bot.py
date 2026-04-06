@@ -1,34 +1,18 @@
 import os
 import sqlite3
-import logging
 from datetime import datetime
 from dotenv import load_dotenv
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# =========================
-# LOGGING
-# =========================
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
-
-# =========================
 # ENV
-# =========================
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
-CALENDLY_LINK = os.getenv("CALENDLY_LINK", "https://calendly.com/hustlelzpro")
 
-if not TOKEN:
-    raise ValueError("BOT_TOKEN missing")
+CALENDLY_LINK = "https://calendly.com/hustlelzpro"
 
-# =========================
 # DB
-# =========================
 conn = sqlite3.connect("leads.db", check_same_thread=False)
 cursor = conn.cursor()
 
@@ -39,159 +23,118 @@ CREATE TABLE IF NOT EXISTS leads (
     capital TEXT,
     objectif TEXT,
     experience TEXT,
-    attempts TEXT,
-    urgency TEXT,
+    timing TEXT,
     score INTEGER,
     created_at TEXT
 )
 """)
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    event TEXT,
+    data TEXT,
+    created_at TEXT
+)
+""")
+
 conn.commit()
 
-# =========================
 # STATE
-# =========================
 user_step = {}
 user_score = {}
 user_answers = {}
 
-# =========================
-# QUESTIONS
-# =========================
+# TRACKING
+def track(user_id, event, data=None):
+    cursor.execute("""
+        INSERT INTO events (user_id, event, data, created_at)
+        VALUES (?, ?, ?, ?)
+    """, (
+        user_id,
+        event,
+        str(data),
+        datetime.now().isoformat()
+    ))
+    conn.commit()
+
+# QUESTIONS (clarifiées)
 QUESTIONS = [
-    ("Combien peux-tu investir immédiatement ?", [
-        "Moins de 300€",
-        "300 à 500€",
-        "500 à 1000€",
-        "Plus de 1000€"
+    ("Quel capital peux-tu réellement mobiliser pour investir ?", [
+        "< 300",
+        "300 - 500",
+        "500 - 1000",
+        "1000+"
     ]),
-    ("Quel est ton objectif principal ?", [
-        "Gagner un complément de revenu",
-        "Remplacer mon salaire",
-        "Faire fructifier mon argent",
-        "Je teste juste par curiosité"
+
+    ("Quel est ton objectif principal aujourd’hui ?", [
+        "Complément de revenu",
+        "Remplacer mon revenu",
+        "Faire fructifier mon capital",
+        "Curiosité / apprentissage"
     ]),
-    ("As-tu de l’expérience en trading / investissement en ligne ?", [
-        "Aucune expérience",
-        "J’ai déjà essayé sans résultats",
-        "J’ai obtenu quelques résultats",
-        "Je suis déjà actif régulièrement"
-    ]),
-    ("As-tu déjà essayé de gagner de l’argent en ligne ?", [
+
+    ("As-tu déjà investi ou tradé de l’argent réel ?", [
         "Jamais",
-        "Oui mais sans succès",
-        "Oui avec petits résultats",
-        "Oui avec résultats stables"
+        "Oui, test (petites sommes)",
+        "Oui, régulièrement"
     ]),
-    ("Quand veux-tu réellement commencer ?", [
-        "Maintenant",
+
+    ("Dans quel délai veux-tu vraiment passer à l’action ?", [
+        "Immédiatement",
         "Dans les 30 jours",
         "Plus tard",
-        "Je ne sais pas encore"
+        "Je regarde juste"
     ])
 ]
 
-# =========================
 # KEYBOARD
-# =========================
 def keyboard(options):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(opt, callback_data=opt)]
         for opt in options
     ])
 
-# =========================
-# SCORING
-# =========================
+# SCORE
 def score(step, choice):
     s = 0
 
     if step == 0:
-        if choice == "Plus de 1000€": s += 4
-        elif choice == "500 à 1000€": s += 3
-        elif choice == "300 à 500€": s += 1
+        if choice == "1000+":
+            s += 4
+        elif choice == "500 - 1000":
+            s += 3
+        elif choice == "300 - 500":
+            s += 1
 
     elif step == 1:
-        if choice == "Remplacer mon salaire": s += 4
-        elif choice == "Gagner un complément de revenu": s += 3
-        elif choice == "Faire fructifier mon argent": s += 2
+        if choice == "Remplacer mon revenu":
+            s += 3
+        elif choice == "Complément de revenu":
+            s += 2
+        elif choice == "Faire fructifier mon capital":
+            s += 1
 
     elif step == 2:
-        if choice == "Je suis déjà actif régulièrement": s += 3
-        elif choice == "J’ai obtenu quelques résultats": s += 2
-        elif choice == "J’ai déjà essayé sans résultats": s += 1
+        if choice == "Oui, régulièrement":
+            s += 2
+        elif choice == "Oui, test (petites sommes)":
+            s += 1
 
     elif step == 3:
-        if choice == "Oui avec résultats stables": s += 4
-        elif choice == "Oui avec petits résultats": s += 2
-        elif choice == "Oui mais sans succès": s += 1
-
-    elif step == 4:
-        if choice == "Maintenant": s += 5
-        elif choice == "Dans les 30 jours": s += 3
-        elif choice == "Plus tard": s -= 1
+        if choice == "Immédiatement":
+            s += 4
+        elif choice == "Dans les 30 jours":
+            s += 2
+        elif choice == "Plus tard":
+            s -= 1
+        elif choice == "Je regarde juste":
+            s -= 3
 
     return s
 
-# =========================
-# RELANCES OPTIMISÉES
-# =========================
-async def relance(context: ContextTypes.DEFAULT_TYPE):
-    job = context.job
-    user_id = job.data["user_id"]
-    score = job.data["score"]
-
-    if score < 10:
-        return
-
-    msg = (
-        "Tu n’as pas réservé.\n\n"
-        "La plupart des gens passent à côté d’une vraie opportunité à ce moment-là.\n\n"
-        "Réserve maintenant :\n"
-        + CALENDLY_LINK
-    )
-
-    await context.bot.send_message(chat_id=user_id, text=msg)
-
-
-async def relance_j1(context: ContextTypes.DEFAULT_TYPE):
-    job = context.job
-    user_id = job.data["user_id"]
-    score = job.data["score"]
-
-    if score < 10:
-        return
-
-    msg = (
-        "Hier tu as montré de l’intérêt.\n\n"
-        "Mais sans passage à l’action, rien ne change.\n\n"
-        "Ceux qui avancent prennent une décision rapidement.\n\n"
-        "Réserve ici :\n"
-        + CALENDLY_LINK
-    )
-
-    await context.bot.send_message(chat_id=user_id, text=msg)
-
-
-async def relance_j3(context: ContextTypes.DEFAULT_TYPE):
-    job = context.job
-    user_id = job.data["user_id"]
-    score = job.data["score"]
-
-    if score < 10:
-        return
-
-    msg = (
-        "Dernier message.\n\n"
-        "On ne propose pas cet accompagnement à tout le monde.\n\n"
-        "Si tu ne réserves pas maintenant, l’accès sera fermé.\n\n"
-        + CALENDLY_LINK
-    )
-
-    await context.bot.send_message(chat_id=user_id, text=msg)
-
-# =========================
 # START
-# =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
@@ -199,81 +142,81 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_score[user_id] = 0
     user_answers[user_id] = []
 
+    track(user_id, "start_quiz")
+
     q, options = QUESTIONS[0]
     await update.message.reply_text(q, reply_markup=keyboard(options))
 
-# =========================
 # HANDLE
-# =========================
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     user_id = query.from_user.id
-
-    if user_id not in user_step:
-        user_step[user_id] = 0
-        user_score[user_id] = 0
-        user_answers[user_id] = []
-
     step = user_step[user_id]
     choice = query.data
 
     user_answers[user_id].append(choice)
     user_score[user_id] += score(step, choice)
 
+    track(user_id, "step_answer", {
+        "step": step,
+        "choice": choice
+    })
+
     step += 1
     user_step[user_id] = step
 
+    # FIN
     if step >= len(QUESTIONS):
         final_score = user_score[user_id]
 
+        track(user_id, "quiz_completed", {"score": final_score})
+
+        segment = "cold"
+
+        if final_score >= 8:
+            segment = "hot"
+        elif final_score >= 5:
+            segment = "warm"
+
+        track(user_id, "lead_segment", segment)
+
         cursor.execute("""
-        INSERT INTO leads (user_id, capital, objectif, experience, attempts, urgency, score, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO leads (user_id, capital, objectif, experience, timing, score, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
             user_id,
             user_answers[user_id][0],
             user_answers[user_id][1],
             user_answers[user_id][2],
             user_answers[user_id][3],
-            user_answers[user_id][4],
             final_score,
             datetime.now().isoformat()
         ))
         conn.commit()
 
-        # SEGMENTATION
-        if final_score >= 14:
-            msg = (
-                "Ton profil est validé.\n\n"
-                "On peut clairement travailler ensemble.\n\n"
-                + CALENDLY_LINK
+        track(user_id, "calendly_sent")
+
+        if segment == "hot":
+            await query.message.reply_text(
+                "Profil validé. Réserve ton appel ici :\n" + CALENDLY_LINK
             )
-        elif final_score >= 10:
-            msg = (
-                "Ton profil est intéressant.\n\n"
-                "On doit valider certains points.\n\n"
-                + CALENDLY_LINK
+        elif segment == "warm":
+            await query.message.reply_text(
+                "Ton profil est intéressant. Voici un accès prioritaire :\n" + CALENDLY_LINK
             )
         else:
-            msg = "Profil non qualifié pour le moment."
-
-        await query.message.reply_text(msg)
-
-        # RELANCES
-        context.job_queue.run_once(relance, 60, data={"user_id": user_id, "score": final_score})
-        context.job_queue.run_once(relance_j1, 86400, data={"user_id": user_id, "score": final_score})
-        context.job_queue.run_once(relance_j3, 259200, data={"user_id": user_id, "score": final_score})
+            await query.message.reply_text(
+                "Tu n’es pas encore au bon moment. Continue à te former et reviens plus tard."
+            )
 
         return
 
     q, options = QUESTIONS[step]
     await query.message.reply_text(q, reply_markup=keyboard(options))
 
-# =========================
 # MAIN
-# =========================
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
@@ -281,7 +224,6 @@ def main():
     app.add_handler(CommandHandler("go", start))
     app.add_handler(CallbackQueryHandler(handle))
 
-    logger.info("BOT STARTED")
     app.run_polling()
 
 if __name__ == "__main__":
