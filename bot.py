@@ -64,28 +64,24 @@ QUESTIONS = [
         "500 à 1000€",
         "Plus de 1000€"
     ]),
-
     ("Quel est ton objectif principal ?", [
         "Gagner un complément de revenu",
         "Remplacer mon salaire",
         "Faire fructifier mon argent",
         "Je teste juste par curiosité"
     ]),
-
     ("As-tu de l’expérience en trading / investissement en ligne ?", [
         "Aucune expérience",
         "J’ai déjà essayé sans résultats",
         "J’ai obtenu quelques résultats",
         "Je suis déjà actif régulièrement"
     ]),
-
     ("As-tu déjà essayé de gagner de l’argent en ligne ?", [
         "Jamais",
         "Oui mais sans succès",
         "Oui avec petits résultats",
         "Oui avec résultats stables"
     ]),
-
     ("Quand veux-tu réellement commencer ?", [
         "Maintenant",
         "Dans les 30 jours",
@@ -110,79 +106,88 @@ def score(step, choice):
     s = 0
 
     if step == 0:
-        if choice == "Plus de 1000€":
-            s += 4
-        elif choice == "500 à 1000€":
-            s += 3
-        elif choice == "300 à 500€":
-            s += 1
+        if choice == "Plus de 1000€": s += 4
+        elif choice == "500 à 1000€": s += 3
+        elif choice == "300 à 500€": s += 1
 
     elif step == 1:
-        if choice == "Remplacer mon salaire":
-            s += 4
-        elif choice == "Gagner un complément de revenu":
-            s += 3
-        elif choice == "Faire fructifier mon argent":
-            s += 2
+        if choice == "Remplacer mon salaire": s += 4
+        elif choice == "Gagner un complément de revenu": s += 3
+        elif choice == "Faire fructifier mon argent": s += 2
 
     elif step == 2:
-        if choice == "Je suis déjà actif régulièrement":
-            s += 3
-        elif choice == "J’ai obtenu quelques résultats":
-            s += 2
-        elif choice == "J’ai déjà essayé sans résultats":
-            s += 1
+        if choice == "Je suis déjà actif régulièrement": s += 3
+        elif choice == "J’ai obtenu quelques résultats": s += 2
+        elif choice == "J’ai déjà essayé sans résultats": s += 1
 
     elif step == 3:
-        if choice == "Oui avec résultats stables":
-            s += 4
-        elif choice == "Oui avec petits résultats":
-            s += 2
-        elif choice == "Oui mais sans succès":
-            s += 1
+        if choice == "Oui avec résultats stables": s += 4
+        elif choice == "Oui avec petits résultats": s += 2
+        elif choice == "Oui mais sans succès": s += 1
 
     elif step == 4:
-        if choice == "Maintenant":
-            s += 5
-        elif choice == "Dans les 30 jours":
-            s += 3
-        elif choice == "Plus tard":
-            s -= 1
+        if choice == "Maintenant": s += 5
+        elif choice == "Dans les 30 jours": s += 3
+        elif choice == "Plus tard": s -= 1
 
     return s
 
 # =========================
-# RELANCE AUTOMATIQUE
+# RELANCES OPTIMISÉES
 # =========================
 async def relance(context: ContextTypes.DEFAULT_TYPE):
     job = context.job
     user_id = job.data["user_id"]
     score = job.data["score"]
 
-    if score >= 14:
-        msg = (
-            "Tu n’as pas réservé ton appel.\n\n"
-            "Les places sont limitées.\n"
-            "Réserve maintenant :\n"
-            + CALENDLY_LINK
-        )
-
-    elif score >= 10:
-        msg = (
-            "Tu hésites encore.\n\n"
-            "Un appel permet de clarifier rapidement ta situation.\n"
-            "Réserve ici :\n"
-            + CALENDLY_LINK
-        )
-
-    else:
+    if score < 10:
         return
 
-    try:
-        await context.bot.send_message(chat_id=user_id, text=msg)
-        logger.info(f"RELANCE SENT to {user_id}")
-    except Exception as e:
-        logger.error(f"RELANCE ERROR: {e}")
+    msg = (
+        "Tu n’as pas réservé.\n\n"
+        "La plupart des gens passent à côté d’une vraie opportunité à ce moment-là.\n\n"
+        "Réserve maintenant :\n"
+        + CALENDLY_LINK
+    )
+
+    await context.bot.send_message(chat_id=user_id, text=msg)
+
+
+async def relance_j1(context: ContextTypes.DEFAULT_TYPE):
+    job = context.job
+    user_id = job.data["user_id"]
+    score = job.data["score"]
+
+    if score < 10:
+        return
+
+    msg = (
+        "Hier tu as montré de l’intérêt.\n\n"
+        "Mais sans passage à l’action, rien ne change.\n\n"
+        "Ceux qui avancent prennent une décision rapidement.\n\n"
+        "Réserve ici :\n"
+        + CALENDLY_LINK
+    )
+
+    await context.bot.send_message(chat_id=user_id, text=msg)
+
+
+async def relance_j3(context: ContextTypes.DEFAULT_TYPE):
+    job = context.job
+    user_id = job.data["user_id"]
+    score = job.data["score"]
+
+    if score < 10:
+        return
+
+    msg = (
+        "Dernier message.\n\n"
+        "On ne propose pas cet accompagnement à tout le monde.\n\n"
+        "Si tu ne réserves pas maintenant, l’accès sera fermé.\n\n"
+        + CALENDLY_LINK
+    )
+
+    await context.bot.send_message(chat_id=user_id, text=msg)
 
 # =========================
 # START
@@ -195,100 +200,76 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_answers[user_id] = []
 
     q, options = QUESTIONS[0]
-
     await update.message.reply_text(q, reply_markup=keyboard(options))
-    logger.info(f"START user {user_id}")
 
 # =========================
 # HANDLE
 # =========================
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        query = update.callback_query
-        await query.answer()
+    query = update.callback_query
+    await query.answer()
 
-        user_id = query.from_user.id
+    user_id = query.from_user.id
 
-        if user_id not in user_step:
-            user_step[user_id] = 0
-            user_score[user_id] = 0
-            user_answers[user_id] = []
+    if user_id not in user_step:
+        user_step[user_id] = 0
+        user_score[user_id] = 0
+        user_answers[user_id] = []
 
-        step = user_step[user_id]
-        choice = query.data
+    step = user_step[user_id]
+    choice = query.data
 
-        user_answers[user_id].append(choice)
-        user_score[user_id] += score(step, choice)
+    user_answers[user_id].append(choice)
+    user_score[user_id] += score(step, choice)
 
-        step += 1
-        user_step[user_id] = step
+    step += 1
+    user_step[user_id] = step
 
-        logger.info(f"USER {user_id} STEP {step} CHOICE {choice}")
+    if step >= len(QUESTIONS):
+        final_score = user_score[user_id]
 
-        if step >= len(QUESTIONS):
-            final_score = user_score[user_id]
+        cursor.execute("""
+        INSERT INTO leads (user_id, capital, objectif, experience, attempts, urgency, score, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            user_id,
+            user_answers[user_id][0],
+            user_answers[user_id][1],
+            user_answers[user_id][2],
+            user_answers[user_id][3],
+            user_answers[user_id][4],
+            final_score,
+            datetime.now().isoformat()
+        ))
+        conn.commit()
 
-            cursor.execute("""
-            INSERT INTO leads (user_id, capital, objectif, experience, attempts, urgency, score, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                user_id,
-                user_answers[user_id][0],
-                user_answers[user_id][1],
-                user_answers[user_id][2],
-                user_answers[user_id][3],
-                user_answers[user_id][4],
-                final_score,
-                datetime.now().isoformat()
-            ))
-            conn.commit()
-
-            # SEGMENTATION
-            if final_score >= 14:
-                msg = (
-                    "Ton profil est validé.\n\n"
-                    "On peut clairement travailler ensemble.\n\n"
-                    "Réserve ton appel ici maintenant :\n"
-                    + CALENDLY_LINK
-                )
-
-            elif final_score >= 10:
-                msg = (
-                    "Ton profil est intéressant.\n\n"
-                    "On doit valider certains points ensemble.\n\n"
-                    "Réserve un appel :\n"
-                    + CALENDLY_LINK
-                )
-
-            else:
-                msg = (
-                    "Ton profil ne correspond pas encore.\n\n"
-                    "Reviens plus tard."
-                )
-
-            await query.message.reply_text(msg)
-
-            # RELANCE AUTO
-            context.job_queue.run_once(
-                relance,
-                when=60,
-                data={"user_id": user_id, "score": final_score}
+        # SEGMENTATION
+        if final_score >= 14:
+            msg = (
+                "Ton profil est validé.\n\n"
+                "On peut clairement travailler ensemble.\n\n"
+                + CALENDLY_LINK
             )
+        elif final_score >= 10:
+            msg = (
+                "Ton profil est intéressant.\n\n"
+                "On doit valider certains points.\n\n"
+                + CALENDLY_LINK
+            )
+        else:
+            msg = "Profil non qualifié pour le moment."
 
-            logger.info(f"LEAD SAVED user {user_id} score {final_score}")
-            return
+        await query.message.reply_text(msg)
 
-        q, options = QUESTIONS[step]
-        await query.message.reply_text(q, reply_markup=keyboard(options))
+        # RELANCES
+        context.job_queue.run_once(relance, 60, data={"user_id": user_id, "score": final_score})
+        context.job_queue.run_once(relance_j1, 86400, data={"user_id": user_id, "score": final_score})
+        context.job_queue.run_once(relance_j3, 259200, data={"user_id": user_id, "score": final_score})
 
-    except Exception as e:
-        logger.error(f"HANDLE ERROR: {e}", exc_info=True)
+        return
 
-# =========================
-# ERROR HANDLER
-# =========================
-async def error_handler(update, context):
-    logger.error("UNHANDLED ERROR", exc_info=context.error)
+    q, options = QUESTIONS[step]
+    await query.message.reply_text(q, reply_markup=keyboard(options))
 
 # =========================
 # MAIN
@@ -299,8 +280,6 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("go", start))
     app.add_handler(CallbackQueryHandler(handle))
-
-    app.add_error_handler(error_handler)
 
     logger.info("BOT STARTED")
     app.run_polling()
