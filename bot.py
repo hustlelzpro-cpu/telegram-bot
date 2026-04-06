@@ -55,7 +55,7 @@ user_score = {}
 user_answers = {}
 
 # =========================
-# QUESTIONS (ULTRA CLAIRES)
+# QUESTIONS
 # =========================
 QUESTIONS = [
     ("Combien peux-tu investir immédiatement ?", [
@@ -211,14 +211,30 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ))
             conn.commit()
 
-            if final_score >= 12:
-                await query.message.reply_text(
-                    "Profil qualifié. Réserve ici :\n" + CALENDLY_LINK
+            # SEGMENTATION + MESSAGE
+            if final_score >= 14:
+                msg = (
+                    "Ton profil est validé.\n\n"
+                    "On peut clairement travailler ensemble.\n\n"
+                    "Réserve ton appel ici maintenant :\n"
+                    + CALENDLY_LINK
                 )
+
+            elif final_score >= 10:
+                msg = (
+                    "Ton profil est intéressant.\n\n"
+                    "On doit valider certains points ensemble avant d'aller plus loin.\n\n"
+                    "Réserve un appel pour voir si ça vaut le coup pour toi :\n"
+                    + CALENDLY_LINK
+                )
+
             else:
-                await query.message.reply_text(
-                    "Profil non qualifié pour le moment."
+                msg = (
+                    "Ton profil ne correspond pas encore.\n\n"
+                    "Reviens plus tard quand tu seras prêt à passer à l'action."
                 )
+
+            await query.message.reply_text(msg)
 
             logger.info(f"LEAD SAVED user {user_id} score {final_score}")
             return
