@@ -24,7 +24,6 @@ TOKEN = os.getenv("BOT_TOKEN")
 CALENDLY_LINK = os.getenv("CALENDLY_LINK", "https://calendly.com/hustlelzpro")
 
 if not TOKEN:
-    logger.error("BOT_TOKEN missing")
     raise ValueError("BOT_TOKEN missing")
 
 # =========================
@@ -40,7 +39,8 @@ CREATE TABLE IF NOT EXISTS leads (
     capital TEXT,
     objectif TEXT,
     experience TEXT,
-    timing TEXT,
+    attempts TEXT,
+    urgency TEXT,
     score INTEGER,
     created_at TEXT
 )
@@ -55,34 +55,41 @@ user_score = {}
 user_answers = {}
 
 # =========================
-# QUESTIONS
+# QUESTIONS (PRO FUNNEL)
 # =========================
 QUESTIONS = [
-    ("Quel capital peux-tu mobiliser ?", [
+    ("Quel capital peux-tu réellement mobiliser immédiatement ?", [
         "< 300",
         "300 - 500",
         "500 - 1000",
         "1000+"
     ]),
 
-    ("Pourquoi veux-tu générer des revenus ?", [
-        "complément de revenu",
-        "remplacer mon revenu",
-        "faire fructifier mon argent",
-        "curiosité"
+    ("Quelle situation décrit le mieux ton objectif ?", [
+        "dépendance financière actuelle",
+        "complément de revenu sérieux",
+        "liberté financière long terme",
+        "curiosité / test"
     ]),
 
-    ("As-tu déjà investi ?", [
+    ("Quel est ton niveau d'expérience réel ?", [
+        "aucune expérience",
+        "quelques tests",
+        "déjà actif / investi régulièrement"
+    ]),
+
+    ("As-tu déjà essayé de générer de l'argent en ligne ?", [
         "jamais",
-        "un peu",
-        "régulièrement"
+        "oui mais échec",
+        "oui avec petits résultats",
+        "oui résultats stables"
     ]),
 
-    ("Dans combien de temps veux-tu te lancer ?", [
-        "immédiatement",
-        "dans les 30 jours",
-        "plus tard",
-        "je regarde juste"
+    ("Quelle est ta situation d'urgence actuelle ?", [
+        "besoin de résultats rapides",
+        "objectif dans 1-3 mois",
+        "objectif long terme",
+        "aucune urgence"
     ])
 ]
 
@@ -96,7 +103,7 @@ def keyboard(options):
     ])
 
 # =========================
-# SCORING
+# SCORING (PRO LOGIC)
 # =========================
 def score(step, choice):
     s = 0
@@ -110,28 +117,34 @@ def score(step, choice):
             s += 1
 
     elif step == 1:
-        if choice == "remplacer mon revenu":
+        if choice == "dépendance financière actuelle":
+            s += 4
+        elif choice == "complément de revenu sérieux":
             s += 3
-        elif choice == "complément de revenu":
+        elif choice == "liberté financière long terme":
             s += 2
-        elif choice == "faire fructifier mon argent":
-            s += 1
 
     elif step == 2:
-        if choice == "régulièrement":
-            s += 2
-        elif choice == "un peu":
+        if choice == "déjà actif / investi régulièrement":
+            s += 3
+        elif choice == "quelques tests":
             s += 1
 
     elif step == 3:
-        if choice == "immédiatement":
+        if choice == "oui résultats stables":
             s += 4
-        elif choice == "dans les 30 jours":
+        elif choice == "oui avec petits résultats":
             s += 2
-        elif choice == "plus tard":
-            s -= 1
-        elif choice == "je regarde juste":
-            s -= 3
+        elif choice == "oui mais échec":
+            s += 1
+
+    elif step == 4:
+        if choice == "besoin de résultats rapides":
+            s += 5
+        elif choice == "objectif dans 1-3 mois":
+            s += 3
+        elif choice == "aucune urgence":
+            s -= 2
 
     return s
 
@@ -160,7 +173,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         user_id = query.from_user.id
 
-        # protection crash state manquant
         if user_id not in user_step:
             user_step[user_id] = 0
             user_score[user_id] = 0
@@ -182,26 +194,27 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             final_score = user_score[user_id]
 
             cursor.execute("""
-            INSERT INTO leads (user_id, capital, objectif, experience, timing, score, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO leads (user_id, capital, objectif, experience, attempts, urgency, score, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 user_id,
                 user_answers[user_id][0],
                 user_answers[user_id][1],
                 user_answers[user_id][2],
                 user_answers[user_id][3],
+                user_answers[user_id][4],
                 final_score,
                 datetime.now().isoformat()
             ))
             conn.commit()
 
-            if final_score >= 6:
+            if final_score >= 12:
                 await query.message.reply_text(
-                    "Réserve ici :\n" + CALENDLY_LINK
+                    "Profil qualifié. Réserve ici :\n" + CALENDLY_LINK
                 )
             else:
                 await query.message.reply_text(
-                    "Profil non qualifié."
+                    "Profil non qualifié pour le moment."
                 )
 
             logger.info(f"LEAD SAVED user {user_id} score {final_score}")
@@ -214,7 +227,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"HANDLE ERROR: {e}", exc_info=True)
 
 # =========================
-# ERROR HANDLER GLOBAL
+# ERROR HANDLER
 # =========================
 async def error_handler(update, context):
     logger.error("UNHANDLED ERROR", exc_info=context.error)
