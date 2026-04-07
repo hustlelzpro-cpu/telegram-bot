@@ -10,7 +10,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
 
-CALENDLY_LINK = "https://calendly.com/hustlelzpro"
+CAL.COM_LINK = "https://cal.com/hustlelzpro/appel-selection"
 
 # DB
 conn = sqlite3.connect("leads.db", check_same_thread=False)
