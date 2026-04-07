@@ -10,7 +10,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
 
-CAL.COM_LINK = "https://cal.com/hustlelzpro/appel-selection"
+CAL_LINK = "https://cal.com/hustlelzpro/appel-selection"
 
 # DB
 conn = sqlite3.connect("leads.db", check_same_thread=False)
@@ -59,7 +59,7 @@ def track(user_id, event, data=None):
     ))
     conn.commit()
 
-# QUESTIONS (clarifiées)
+# QUESTIONS
 QUESTIONS = [
     ("Quel capital peux-tu réellement mobiliser pour investir ?", [
         "< 300",
@@ -67,20 +67,17 @@ QUESTIONS = [
         "500 - 1000",
         "1000+"
     ]),
-
     ("Quel est ton objectif principal aujourd’hui ?", [
         "Complément de revenu",
         "Remplacer mon revenu",
         "Faire fructifier mon capital",
         "Curiosité / apprentissage"
     ]),
-
     ("As-tu déjà investi ou tradé de l’argent réel ?", [
         "Jamais",
         "Oui, test (petites sommes)",
         "Oui, régulièrement"
     ]),
-
     ("Dans quel délai veux-tu vraiment passer à l’action ?", [
         "Immédiatement",
         "Dans les 30 jours",
@@ -101,36 +98,24 @@ def score(step, choice):
     s = 0
 
     if step == 0:
-        if choice == "1000+":
-            s += 4
-        elif choice == "500 - 1000":
-            s += 3
-        elif choice == "300 - 500":
-            s += 1
+        if choice == "1000+": s += 4
+        elif choice == "500 - 1000": s += 3
+        elif choice == "300 - 500": s += 1
 
     elif step == 1:
-        if choice == "Remplacer mon revenu":
-            s += 3
-        elif choice == "Complément de revenu":
-            s += 2
-        elif choice == "Faire fructifier mon capital":
-            s += 1
+        if choice == "Remplacer mon revenu": s += 3
+        elif choice == "Complément de revenu": s += 2
+        elif choice == "Faire fructifier mon capital": s += 1
 
     elif step == 2:
-        if choice == "Oui, régulièrement":
-            s += 2
-        elif choice == "Oui, test (petites sommes)":
-            s += 1
+        if choice == "Oui, régulièrement": s += 2
+        elif choice == "Oui, test (petites sommes)": s += 1
 
     elif step == 3:
-        if choice == "Immédiatement":
-            s += 4
-        elif choice == "Dans les 30 jours":
-            s += 2
-        elif choice == "Plus tard":
-            s -= 1
-        elif choice == "Je regarde juste":
-            s -= 3
+        if choice == "Immédiatement": s += 4
+        elif choice == "Dans les 30 jours": s += 2
+        elif choice == "Plus tard": s -= 1
+        elif choice == "Je regarde juste": s -= 3
 
     return s
 
@@ -167,14 +152,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     step += 1
     user_step[user_id] = step
 
-    # FIN
     if step >= len(QUESTIONS):
         final_score = user_score[user_id]
 
         track(user_id, "quiz_completed", {"score": final_score})
 
         segment = "cold"
-
         if final_score >= 8:
             segment = "hot"
         elif final_score >= 5:
@@ -196,15 +179,15 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ))
         conn.commit()
 
-        track(user_id, "calendly_sent")
+        track(user_id, "cal_link_sent")
 
         if segment == "hot":
             await query.message.reply_text(
-                "Profil validé. Réserve ton appel ici :\n" + CALENDLY_LINK
+                "Profil validé. Réserve ton appel ici :\n" + CAL_LINK
             )
         elif segment == "warm":
             await query.message.reply_text(
-                "Ton profil est intéressant. Voici un accès prioritaire :\n" + CALENDLY_LINK
+                "Ton profil est intéressant. Voici un accès prioritaire :\n" + CAL_LINK
             )
         else:
             await query.message.reply_text(
